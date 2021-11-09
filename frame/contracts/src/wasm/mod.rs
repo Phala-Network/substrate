@@ -103,6 +103,7 @@ impl ExportedFunction {
 		match self {
 			Self::Constructor => "deploy",
 			Self::Call => "call",
+			Self::DirectCall { name } => name,
 		}
 	}
 }

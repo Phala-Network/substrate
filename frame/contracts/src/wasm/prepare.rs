@@ -229,6 +229,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			match export.field() {
 				"call" => call_found = true,
 				"deploy" => deploy_found = true,
+				field @ _ if field.to_uppercase().starts_with("PINK_") => continue,
 				_ => return Err("unknown export: expecting only deploy and call functions"),
 			}
 

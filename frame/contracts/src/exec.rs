@@ -218,6 +218,8 @@ pub enum ExportedFunction {
 	Constructor,
 	/// The function which is executed when a contract is called.
 	Call,
+	/// Any function directly called by given name.
+	DirectCall { name: &'static str },
 }
 
 /// A trait that represents something that can be executed.
@@ -368,6 +370,8 @@ enum FrameArgs<'a, T: Config, E> {
 		dest: T::AccountId,
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
+		/// The function name to be called.
+		name: Option<&'static str>,
 	},
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
@@ -478,11 +482,12 @@ where
 		gas_meter: &'a mut GasMeter<T>,
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
+		name: Option<&'static str>,
 		input_data: Vec<u8>,
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
-			FrameArgs::Call { dest, cached_info: None },
+			FrameArgs::Call { dest, cached_info: None, name },
 			origin,
 			gas_meter,
 			schedule,
@@ -567,7 +572,7 @@ where
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E), ExecError> {
 		let (account_id, contract_info, executable, entry_point) = match frame_args {
-			FrameArgs::Call { dest, cached_info } => {
+			FrameArgs::Call { dest, cached_info, name } => {
 				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
@@ -576,7 +581,12 @@ where
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)?;
 
-				(dest, contract, executable, ExportedFunction::Call)
+				let function = match name {
+					None => ExportedFunction::Call,
+					Some(name) => ExportedFunction::DirectCall { name },
+				};
+
+				(dest, contract, executable, function)
 			},
 			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
 				let account_id =
@@ -892,7 +902,7 @@ where
 					_ => None,
 				});
 			let executable =
-				self.push_frame(FrameArgs::Call { dest: to, cached_info }, value, gas_limit)?;
+				self.push_frame(FrameArgs::Call { dest: to, cached_info, name: None }, value, gas_limit)?;
 			self.run(executable, input_data)
 		};
 

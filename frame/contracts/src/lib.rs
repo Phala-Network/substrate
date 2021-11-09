@@ -273,7 +273,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let output = Self::internal_call(origin, dest, value, gas_limit, data, None);
+			let output = Self::internal_call(origin, dest, value, gas_limit, None, data, None);
 			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
@@ -547,12 +547,13 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
+		name: Option<&'static str>,
 		data: Vec<u8>,
 		debug: bool,
 	) -> ContractExecResult {
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output =
-			Self::internal_call(origin, dest, value, gas_limit, data, debug_message.as_mut());
+			Self::internal_call(origin, dest, value, gas_limit, name, data, debug_message.as_mut());
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
@@ -685,6 +686,7 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
+		name: Option<&'static str>,
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalCallOutput<T> {
@@ -696,6 +698,7 @@ where
 			&mut gas_meter,
 			&schedule,
 			value,
+			name,
 			data,
 			debug_message,
 		);
