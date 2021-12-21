@@ -24,7 +24,7 @@ use crate::{
 	storage::{RawContractInfo, Storage},
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Config, ContractInfoOf, Error, Pallet, Schedule,
+	BalanceOf, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -297,6 +297,7 @@ impl Config for Test {
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
+	type AddressGenerator = DefaultAddressGenerator;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

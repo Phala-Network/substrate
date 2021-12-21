@@ -133,6 +133,43 @@ type BalanceOf<T> =
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
+/// The address generator function used to determine the address of a contract.
+pub trait AddressGenerator<T: frame_system::Config> {
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId;
+}
+
+/// This is the default address generator used by contract instantiation. Its result
+/// is only dependend on its inputs. It can therefore be used to reliably predict the
+/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
+/// is no CREATE equivalent because CREATE2 is strictly more powerful.
+///
+/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+pub struct DefaultAddressGenerator;
+
+impl<T> AddressGenerator<T> for DefaultAddressGenerator
+where
+	T: frame_system::Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
+			.chain(code_hash.as_ref())
+			.chain(salt)
+			.cloned()
+			.collect();
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -222,6 +259,9 @@ pub mod pallet {
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 		#[pallet::constant]
 		type DeletionWeightLimit: Get<Weight>;
+
+		/// The address generator used to generate the addresses of contracts.
+		type AddressGenerator: AddressGenerator<Self>;
 	}
 
 	#[pallet::pallet]
@@ -561,19 +601,7 @@ where
 		}
 	}
 
-	/// Instantiate a new contract.
-	///
-	/// This function is similar to [`Self::instantiate`], but doesn't perform any address lookups
-	/// and better suitable for calling directly from Rust.
-	///
-	/// It returns the execution result, account id and the amount of used weight.
-	///
-	///
-	/// # Note
-	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// This is the address generation function used by contract instantiation.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		endowment: BalanceOf<T>,
@@ -613,27 +641,13 @@ where
 		Ok(maybe_value)
 	}
 
-	/// Determine the address of a contract,
-	///
-	/// This is the address generation function used by contract instantiation. Its result
-	/// is only dependend on its inputs. It can therefore be used to reliably predict the
-	/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
-	/// is no CREATE equivalent because CREATE2 is strictly more powerful.
-	///
-	/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+	/// This is the address generation function used by contract instantiation.
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
 	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit)
